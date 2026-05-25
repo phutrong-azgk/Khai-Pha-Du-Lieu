@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.vscode/
+models/*.pkl
+output/*.csv
+output/*.json
+
+data/events.csv
