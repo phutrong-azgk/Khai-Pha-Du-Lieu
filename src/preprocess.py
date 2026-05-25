@@ -5,11 +5,10 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# SỬA: Đổi category sang object để tránh lỗi Categorical khi xử lý chunk
 CONFIG = {
     "dtypes": {
-        "user_id": "int64",
-        "product_id": "int32",
+        "user_id": "Int64",       # Đã sửa thành Int64 (chữ I viết hoa)
+        "product_id": "Int32",    # Đã sửa thành Int32 (chữ I viết hoa)
         "price": "float32",
         "event_type": "object", 
         "brand": "object",
@@ -50,17 +49,19 @@ def load_and_clean(filepath: str, output_path: str = "output/clean_purchase_data
     df = df[(df["price"] > 0) & (df["price"] < CONFIG["winsor_price_threshold"])]
     report["invalid_prices_removed"] = (before_price - len(df))
 
+    # XÓA CÁC DÒNG CÓ CHỨA DỮ LIỆU NA Ở CÁC CỘT QUAN TRỌNG
+    before_dropna = len(df)
+    df.dropna(subset=["user_id", "product_id", "price", "event_type"], inplace=True)
+    report["null_rows_removed"] += (before_dropna - len(df))
+
     # Xử lý null cột brand/category bằng cách gán giá trị mặc định
-    df[["brand", "category_code"]] = df[["brand", "category_code"]].fillna("unknown")
+    df["brand"] = df["brand"].fillna("unknown")
+    df["category_code"] = df["category_code"].fillna("unknown")
 
     # Deduplicate
     before_dedup = len(df)
     df.drop_duplicates(subset=CONFIG["dedup_subset"], inplace=True)
     report["duplicates_removed"] = (before_dedup - len(df))
-
-    # Tối ưu hóa bộ nhớ sau khi làm sạch xong
-    for col in ["event_type", "brand", "category_code"]:
-        df[col] = df[col].astype("category")
 
     # Xuất báo cáo
     os.makedirs(os.path.dirname(CONFIG["output_meta"]), exist_ok=True)
