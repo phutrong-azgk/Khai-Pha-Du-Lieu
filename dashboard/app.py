@@ -633,14 +633,15 @@ if "features" in st.session_state:
         persona_mapping[c_name] = (p_label, p_desc)
         assigned_personas.add(p_label)
 
-    # Cấu trúc 6 Tab hiển thị phân tích chuyên sâu (Đã tích hợp thêm Tab So Sánh và Boxplot mới)
+    # Cấu trúc 7 Tab hiển thị phân tích chuyên sâu (Tích hợp thêm Association Rules)
     tabs = st.tabs([
         "Không gian PCA Scatter", 
         "Thống kê Phân phối & Profile", 
         "So sánh Thuật toán", 
         "Personas Chân dung", 
         "Chiến lược Marketing", 
-        "Chẩn đoán Kỹ thuật"
+        "Chẩn đoán Kỹ thuật",
+        "Khai phá Luật kết hợp"
     ])
 
     # ── Tab 1: Không gian giảm chiều PCA ──────────────────────────────────────
@@ -875,8 +876,8 @@ if "features" in st.session_state:
             st.plotly_chart(fig_pie, use_container_width=True)
             
         with col_chart_right:
-            st.subheader("Biểu đồ Radar — RFM Profile")
-            radar_cols = ["Recency", "Frequency", "Monetary", "Brand_Diversity", "Average_Basket_Value"]
+            st.subheader("Biểu đồ Radar — Hàng vi & Đa dạng Mua sắm (6 biến)")
+            radar_cols = ["Recency", "Frequency", "Monetary", "Average_Basket_Value", "Brand_Diversity", "Category_Diversity"]
             active_radar_cols = [c for c in radar_cols if c in merged.columns]
             
             radar_data = merged.groupby("Cluster")[active_radar_cols].mean()
@@ -1089,6 +1090,12 @@ if "features" in st.session_state:
                 else:
                     st.info(f"**{config['label']}:**")
                     st.markdown(html_content, unsafe_allow_html=True)
+                
+                # Cảnh báo có Insight bán chéo
+                rules_file = os.path.join(project_root, "output", "association_rules", f"segment_{cluster}_rules.csv")
+                if os.path.exists(rules_file):
+                    st.success(f"🛒 **Cơ hội Cross-selling:** Hệ thống ghi nhận nhóm khách hàng này có tính liên kết giỏ hàng rất cao. Hãy xem chi tiết tại **Tab Khai phá Luật kết hợp**!")
+                
                 st.write("")
 
     # ─── Tab 6: Chẩn đoán thuật toán ──────────────────────────────────────────
@@ -1210,5 +1217,74 @@ if "features" in st.session_state:
                     st.warning(f"Không thể khởi chạy XGBoost tính Feature Importance: {e}")
             else:
                 st.info("💡 Không đủ số lượng cụm định danh (cần ít nhất 2 nhóm rõ ràng không bao gồm điểm nhiễu) để đánh giá ma trận đóng góp.")
+                
+    # ─── Tab 7: Khai phá Luật kết hợp (Market Basket Analysis) ────────────────
+    with tabs[6]:
+        st.markdown("<h3 style='color:#10B981; margin-bottom: 15px;'>Khai phá Luật kết hợp (Association Rules)</h3>", unsafe_allow_html=True)
+        st.markdown("Phân tích các sản phẩm/nhóm ngành hàng thường được khách hàng mua cùng nhau (Market Basket Analysis) dựa trên thuật toán **FP-Growth**.")
+        
+        import re
+        rules_dir = os.path.join(project_root, "output", "association_rules")
+        if os.path.exists(rules_dir):
+            rule_files = [f for f in os.listdir(rules_dir) if f.endswith('.csv')]
+            if not rule_files:
+                st.warning("Chưa có kết quả khai phá luật kết hợp. Hãy chạy script `src/association_rules.py` trước.")
+            else:
+                # Mapping các tập luật có sẵn
+                rule_options = {}
+                for f in rule_files:
+                    if "global" in f:
+                        rule_options["Luật chung (Toàn bộ hệ thống)"] = f
+                    else:
+                        match = re.search(r'segment_(\d+)_rules', f)
+                        if match:
+                            seg_id = int(match.group(1))
+                            p_name, _ = persona_mapping.get(seg_id, ("Cụm này", ""))
+                            rule_options[f"Cụm {seg_id} — {p_name}"] = f
+                            
+                if rule_options:
+                    selected_rule_opt = st.selectbox("Chọn tệp luật khách hàng để phân tích:", list(rule_options.keys()))
+                    if selected_rule_opt:
+                        rule_df = pd.read_csv(os.path.join(rules_dir, rule_options[selected_rule_opt]))
+                        
+                        if rule_df.empty:
+                            st.info("Không tìm thấy luật kết hợp thỏa mãn độ tin cậy trong tập dữ liệu này.")
+                        else:
+                            st.success(f"Phát hiện **{len(rule_df)}** quy luật hành vi mua sắm.")
+                            
+                            for col in ["support", "confidence", "lift", "leverage", "conviction", "zhangs_metric"]:
+                                if col in rule_df.columns:
+                                    rule_df[col] = rule_df[col].round(3)
+                            
+                            st.dataframe(
+                                rule_df[["antecedents", "consequents", "support", "confidence", "lift"]]\
+                                .rename(columns={"antecedents": "Sản phẩm A (Đã mua)", "consequents": "Sản phẩm B (Sẽ mua)",
+                                                 "support": "Độ phổ biến", "confidence": "Xác suất (Confidence)", "lift": "Sức mạnh (Lift)"})\
+                                .style.background_gradient(cmap="Greens", subset=["Xác suất (Confidence)", "Sức mạnh (Lift)"]),
+                                use_container_width=True
+                            )
+                            
+                            st.markdown("#### Trực quan hóa tương quan quy luật (Golden Rules)")
+                            st.caption("Góc trên cùng bên phải là những quy luật đáng giá nhất (Phổ biến & Chắc chắn cao). Kích thước bóng đại diện cho độ đột phá (Lift).")
+                            
+                            # Xử lý để đưa tên luật vào hover
+                            rule_df["Quy luật"] = rule_df["antecedents"] + " ➡️ " + rule_df["consequents"]
+                            
+                            fig_rules = px.scatter(
+                                rule_df, x="support", y="confidence",
+                                size="lift", color="lift",
+                                hover_name="Quy luật",
+                                color_continuous_scale="Tealgrn",
+                                labels={"support": "Mức độ Phổ biến (Support)", "confidence": "Độ Tin cậy (Confidence)", "lift": "Lift"}
+                            )
+                            fig_rules.update_layout(**PLOTLY_THEME)
+                            # Giữ kích thước bong bóng to dễ nhìn
+                            fig_rules.update_traces(marker=dict(sizemin=5))
+                            st.plotly_chart(fig_rules, use_container_width=True)
+                else:
+                    st.info("Không tìm thấy tệp luật hợp lệ.")
+        else:
+            st.warning("Thư mục `output/association_rules` không tồn tại.")
+
 else:
     st.info("Vui lòng cấu hình tệp tin và nhấn nút **Khởi chạy Phân cụm Hệ thống** tại Sidebar để tạo lập Dashboard.")
