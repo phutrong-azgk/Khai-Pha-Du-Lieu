@@ -28,9 +28,7 @@ FEATURE_COLS = [
     "Recency",
     "Frequency",
     "Monetary",
-    "Average_Basket_Value",
-    "Brand_Diversity",
-    "Category_Diversity"
+    "Average_Basket_Value"
 ]
 
 # ==========================================================

@@ -15,7 +15,7 @@ PIPELINE_CONFIG = {
     "features": {
         "required_schema": ["user_id", "event_time", "product_id", "price", "brand", "category_code"],
         "target_cols": [
-            "Recency", "Frequency", "Monetary", "Average_Basket_Value", "Brand_Diversity", "Category_Diversity"
+            "Recency", "Frequency", "Monetary", "Average_Basket_Value"
         ]
     },
     "preprocessing": {
@@ -104,8 +104,8 @@ def scale_and_reduce(
     low_q = prep_cfg["winsor_lower"]
     high_q = prep_cfg["winsor_upper"]
     
-    # 1. Winsorization: Áp dụng cho toàn bộ đặc trưng
-    cols_to_winsorize = feature_cols
+    # 1. Winsorization: Chỉ áp dụng cho 4 đặc trưng cốt lõi
+    cols_to_winsorize = ["Recency", "Frequency", "Monetary", "Average_Basket_Value"]
     for col in cols_to_winsorize:
         if col in X_df.columns:
             q_low = X_df[col].quantile(low_q)
@@ -113,8 +113,8 @@ def scale_and_reduce(
             X_df[col] = X_df[col].clip(q_low, q_high)
             logger.info(f"    -> Winsorized feature: {col}")
 
-    # 2. Log Transform: Áp dụng cho toàn bộ đặc trưng có độ lệch (skew) lớn
-    cols_to_log = feature_cols
+    # 2. Log Transform: Chỉ áp dụng cho 4 đặc trưng cốt lõi
+    cols_to_log = ["Recency", "Frequency", "Monetary", "Average_Basket_Value"]
     for col in cols_to_log:
         if col in X_df.columns:
             # Kiểm tra độ lệch (skew) để quyết định có áp dụng log hay không

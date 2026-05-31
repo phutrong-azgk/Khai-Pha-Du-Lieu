@@ -16,7 +16,7 @@ import hdbscan
 # =========================================================
 # AUTO BENCHMARK ENGINE
 # =========================================================
-def run_clustering_experiments(X_scaled, X_pca=None):
+def run_clustering_experiments(X_scaled):
 
     results = []
 
@@ -195,15 +195,14 @@ def run_clustering_experiments(X_scaled, X_pca=None):
             min_samples=10
         )
 
-        X_for_hdbscan = X_pca if X_pca is not None else X_scaled
-        labels = hdb.fit_predict(X_for_hdbscan)
+        labels = hdb.fit_predict(X_scaled)
 
         valid_mask = labels != -1
 
         if valid_mask.sum() > 20:
 
             clean_labels = labels[valid_mask]
-            clean_X = X_for_hdbscan[valid_mask]
+            clean_X = X_scaled[valid_mask]
 
             unique_labels = np.unique(clean_labels)
 
